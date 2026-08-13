@@ -99,7 +99,7 @@ legend { margin-bottom: 10px; padding: 0; color: var(--muted); font-size: 11px; 
 .ring div { z-index: 1; grid-area: 1 / 1; display: grid; text-align: center; }
 .ring strong { font-size: 28px; line-height: 1; }
 .ring span { margin-top: 5px; color: var(--muted); font-size: 10px; }
-.model-context-card { display: grid; grid-template-columns: minmax(150px, 1.35fr) repeat(4, minmax(76px, 1fr)) auto; align-items: center; gap: 9px; padding: 13px 16px; border-radius: 13px; }
+.model-context-card { display: grid; grid-template-columns: minmax(145px, 1.3fr) repeat(5, minmax(68px, 1fr)) auto; align-items: center; gap: 8px; padding: 13px 16px; border-radius: 13px; }
 .model-identity { min-width: 0; }
 .model-identity .eyebrow { margin-bottom: 2px; }
 .model-identity > strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }

@@ -7,7 +7,6 @@ type Inputs = {
   maxBatchedTokens: number;
   dpSize: number;
   tpSize: number;
-  epSize: number;
   maxBS: number;
   graphCount: number;
   cannGB: number;
@@ -17,7 +16,6 @@ const DEFAULTS: Inputs = {
   maxBatchedTokens: 4096,
   dpSize: 8,
   tpSize: 8,
-  epSize: 8,
   maxBS: 128,
   graphCount: 5,
   cannGB: 1,
@@ -54,15 +52,14 @@ export default function Home() {
   const families = Array.from(new Set(MODELS.map((item) => item.family)));
   const [family, setFamily] = useState(model.family);
   const familyModels = MODELS.filter((item) => item.family === family);
-  const epSizes = Array.from({ length: model.expertCount }, (_, index) => index + 1)
-    .filter((size) => model.expertCount % size === 0);
-  const localExpertNum = model.expertCount / inputs.epSize;
+  const epSize = Math.max(1, Math.floor(safe(inputs.tpSize, 1)) * Math.floor(safe(inputs.dpSize, 1)));
+  const localExpertNum = model.expertCount / epSize;
 
   const result = useMemo(() => {
     const H = model.hiddenSize;
     const T = safe(inputs.maxBatchedTokens);
     const dp = Math.max(1, safe(inputs.dpSize, 1));
-    const ep = Math.max(1, safe(inputs.epSize, 1));
+    const ep = epSize;
     const K = model.topK;
     const localExperts = localExpertNum;
     const maxBS = safe(inputs.maxBS);
@@ -100,7 +97,7 @@ export default function Home() {
       cann,
       total,
     };
-  }, [inputs, localExpertNum, model.hiddenSize, model.topK]);
+  }, [inputs, epSize, localExpertNum, model.hiddenSize, model.topK]);
 
   const update = (key: keyof Inputs, value: string) => {
     setInputs((current) => ({ ...current, [key]: Number(value) }));
@@ -110,13 +107,10 @@ export default function Home() {
     const nextModel = MODELS.find((item) => item.family === nextFamily) ?? MODELS[0];
     setFamily(nextFamily);
     setModelId(nextModel.id);
-    setInputs((current) => ({ ...current, epSize: nextModel.expertCount % current.epSize === 0 ? current.epSize : 1 }));
   };
 
   const changeModel = (nextId: string) => {
-    const nextModel = MODELS.find((item) => item.id === nextId) ?? MODELS[0];
     setModelId(nextId);
-    setInputs((current) => ({ ...current, epSize: nextModel.expertCount % current.epSize === 0 ? current.epSize : 1 }));
   };
 
   const reset = () => {
@@ -185,10 +179,9 @@ export default function Home() {
 
             <fieldset>
               <legend>并行策略</legend>
-              <div className="field-grid three">
+              <div className="field-grid">
                 <NumberField label="DP size" value={inputs.dpSize} onChange={(v) => update("dpSize", v)} />
                 <NumberField label="TP size" value={inputs.tpSize} onChange={(v) => update("tpSize", v)} />
-                <SelectField label="EP size" value={String(inputs.epSize)} onChange={(v) => update("epSize", v)} options={epSizes.map((size) => ({ value: String(size), label: String(size) }))} />
               </div>
             </fieldset>
 
@@ -223,7 +216,8 @@ export default function Home() {
               <div className="model-fact"><span>Hidden size</span><strong>{model.hiddenSize.toLocaleString("zh-CN")}</strong></div>
               <div className="model-fact"><span>专家总数</span><strong>{model.expertCount.toLocaleString("zh-CN")}</strong></div>
               <div className="model-fact"><span>TopK 专家</span><strong>{model.topK.toLocaleString("zh-CN")}</strong></div>
-              <div className="model-fact"><span>本地专家数</span><strong>{localExpertNum.toLocaleString("zh-CN")}</strong><small>{model.expertCount} ÷ EP {inputs.epSize}</small></div>
+              <div className="model-fact"><span>EP size</span><strong>{epSize.toLocaleString("zh-CN")}</strong><small>TP {inputs.tpSize} × DP {inputs.dpSize}</small></div>
+              <div className="model-fact"><span>本地专家数</span><strong>{localExpertNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}</strong><small>{model.expertCount} ÷ EP {epSize}</small></div>
               <a className="model-source" href={model.source} target="_blank" rel="noopener noreferrer" aria-label={`查看 ${model.label} 官方配置`}>官方配置 ↗</a>
             </article>
 
@@ -258,13 +252,13 @@ export default function Home() {
               <div className="detail-sections">
                 <DetailSection title="激活占用" value={result.activation} tone="coral">
                   <DetailRow label="Hidden states + residual" value={result.hiddenResidual} formula={`2 × 2 B × ${inputs.maxBatchedTokens} × ${model.hiddenSize}`} />
-                  <DetailRow label="4 份 MoE 激活 buffer" value={result.moeBuffers} formula={`4 × 2 B × ${inputs.dpSize} × ${inputs.maxBatchedTokens} × ${model.topK} ÷ ${inputs.epSize} × ${model.hiddenSize}`} />
+                  <DetailRow label="4 份 MoE 激活 buffer" value={result.moeBuffers} formula={`4 × 2 B × ${inputs.dpSize} × ${inputs.maxBatchedTokens} × ${model.topK} ÷ ${epSize} × ${model.hiddenSize}`} />
                 </DetailSection>
 
                 <DetailSection title="HCCL buffer" value={result.hccl} tone="blue">
                   <DetailRow label="DP buffer" value={result.hcclDP} formula={`max(ceil((${inputs.dpSize} + 1) × 4 ÷ 1024²), 50) × 2 MB`} />
                   <DetailRow label="TP buffer" value={result.hcclTP} formula="200 MB × 2" />
-                  <DetailRow label={`EP buffer（本地专家 ${localExpertNum}）`} value={result.hcclEP} formula={`2 × (${model.expertCount} ÷ ${inputs.epSize} × Max BS × EP × 480Align512 + K × Max BS × Align512)`} />
+                  <DetailRow label={`EP buffer（本地专家 ${localExpertNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}）`} value={result.hcclEP} formula={`2 × (${model.expertCount} ÷ ${epSize} × Max BS × EP × 480Align512 + K × Max BS × Align512)`} />
                   <div className="sub-detail">
                     <span>Dispatch {formatMB(result.epDispatch)}</span>
                     <span>Combine {formatMB(result.epCombine)}</span>

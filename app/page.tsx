@@ -1,28 +1,25 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import { DEFAULT_MODEL_ID, MODELS } from "./models";
 
 type Inputs = {
-  hiddenSize: number;
   maxBatchedTokens: number;
   dpSize: number;
   tpSize: number;
   epSize: number;
   topK: number;
-  localExpertNum: number;
   maxBS: number;
   graphCount: number;
   cannGB: number;
 };
 
 const DEFAULTS: Inputs = {
-  hiddenSize: 7168,
   maxBatchedTokens: 4096,
   dpSize: 8,
   tpSize: 8,
   epSize: 8,
   topK: 8,
-  localExpertNum: 32,
   maxBS: 128,
   graphCount: 5,
   cannGB: 1,
@@ -53,15 +50,23 @@ function safe(value: number, fallback = 0) {
 
 export default function Home() {
   const [inputs, setInputs] = useState(DEFAULTS);
+  const [modelId, setModelId] = useState(DEFAULT_MODEL_ID);
   const [dark, setDark] = useState(false);
+  const model = MODELS.find((item) => item.id === modelId) ?? MODELS[0];
+  const families = Array.from(new Set(MODELS.map((item) => item.family)));
+  const [family, setFamily] = useState(model.family);
+  const familyModels = MODELS.filter((item) => item.family === family);
+  const epSizes = Array.from({ length: model.expertCount }, (_, index) => index + 1)
+    .filter((size) => model.expertCount % size === 0);
+  const localExpertNum = model.expertCount / inputs.epSize;
 
   const result = useMemo(() => {
-    const H = safe(inputs.hiddenSize);
+    const H = model.hiddenSize;
     const T = safe(inputs.maxBatchedTokens);
     const dp = Math.max(1, safe(inputs.dpSize, 1));
     const ep = Math.max(1, safe(inputs.epSize, 1));
     const K = safe(inputs.topK);
-    const localExperts = safe(inputs.localExpertNum);
+    const localExperts = localExpertNum;
     const maxBS = safe(inputs.maxBS);
 
     const hiddenResidual = 2 * 2 * T * H;
@@ -97,10 +102,30 @@ export default function Home() {
       cann,
       total,
     };
-  }, [inputs]);
+  }, [inputs, localExpertNum, model.hiddenSize]);
 
   const update = (key: keyof Inputs, value: string) => {
     setInputs((current) => ({ ...current, [key]: Number(value) }));
+  };
+
+  const changeFamily = (nextFamily: string) => {
+    const nextModel = MODELS.find((item) => item.family === nextFamily) ?? MODELS[0];
+    setFamily(nextFamily);
+    setModelId(nextModel.id);
+    setInputs((current) => ({ ...current, epSize: nextModel.expertCount % current.epSize === 0 ? current.epSize : 1 }));
+  };
+
+  const changeModel = (nextId: string) => {
+    const nextModel = MODELS.find((item) => item.id === nextId) ?? MODELS[0];
+    setModelId(nextId);
+    setInputs((current) => ({ ...current, epSize: nextModel.expertCount % current.epSize === 0 ? current.epSize : 1 }));
+  };
+
+  const reset = () => {
+    const defaultModel = MODELS.find((item) => item.id === DEFAULT_MODEL_ID) ?? MODELS[0];
+    setFamily(defaultModel.family);
+    setModelId(defaultModel.id);
+    setInputs(DEFAULTS);
   };
 
   const categories = [
@@ -143,15 +168,25 @@ export default function Home() {
                 <span className="eyebrow">CONFIGURATION</span>
                 <h2>模型与负载</h2>
               </div>
-              <button className="reset" type="button" onClick={() => setInputs(DEFAULTS)}>重置</button>
+              <button className="reset" type="button" onClick={reset}>重置</button>
             </div>
 
             <fieldset>
-              <legend>核心参数</legend>
+              <legend>模型配置</legend>
               <div className="field-grid">
-                <NumberField label="Hidden size" value={inputs.hiddenSize} onChange={(v) => update("hiddenSize", v)} />
-                <NumberField label="Max batched tokens" value={inputs.maxBatchedTokens} onChange={(v) => update("maxBatchedTokens", v)} />
+                <SelectField label="模型族" value={family} onChange={changeFamily} options={families.map((item) => ({ value: item, label: item }))} />
+                <SelectField label="模型" value={modelId} onChange={changeModel} options={familyModels.map((item) => ({ value: item.id, label: item.label }))} />
               </div>
+              <div className="field-grid">
+                <ReadOnlyField label="Hidden size" value={model.hiddenSize.toLocaleString("zh-CN")} />
+                <ReadOnlyField label="专家总数" value={model.expertCount.toLocaleString("zh-CN")} />
+              </div>
+              <a className="model-source" href={model.source} target="_blank" rel="noopener noreferrer">查看官方模型配置 ↗</a>
+            </fieldset>
+
+            <fieldset>
+              <legend>负载参数</legend>
+              <NumberField label="Max batched tokens" value={inputs.maxBatchedTokens} onChange={(v) => update("maxBatchedTokens", v)} />
             </fieldset>
 
             <fieldset>
@@ -159,12 +194,13 @@ export default function Home() {
               <div className="field-grid three">
                 <NumberField label="DP size" value={inputs.dpSize} onChange={(v) => update("dpSize", v)} />
                 <NumberField label="TP size" value={inputs.tpSize} onChange={(v) => update("tpSize", v)} />
-                <NumberField label="EP size" value={inputs.epSize} onChange={(v) => update("epSize", v)} />
+                <SelectField label="EP size" value={String(inputs.epSize)} onChange={(v) => update("epSize", v)} options={epSizes.map((size) => ({ value: String(size), label: String(size) }))} />
               </div>
               <div className="field-grid">
                 <NumberField label="TopK 专家" value={inputs.topK} onChange={(v) => update("topK", v)} />
-                <NumberField label="本地专家数" value={inputs.localExpertNum} onChange={(v) => update("localExpertNum", v)} />
+                <ReadOnlyField label="本地专家数" value={localExpertNum.toLocaleString("zh-CN")} />
               </div>
+              <p className="field-note">本地专家数 = {model.expertCount} ÷ {inputs.epSize} = {localExpertNum}</p>
             </fieldset>
 
             <fieldset>
@@ -220,14 +256,14 @@ export default function Home() {
 
               <div className="detail-sections">
                 <DetailSection title="激活占用" value={result.activation} tone="coral">
-                  <DetailRow label="Hidden states + residual" value={result.hiddenResidual} formula={`2 × 2 B × ${inputs.maxBatchedTokens} × ${inputs.hiddenSize}`} />
-                  <DetailRow label="4 份 MoE 激活 buffer" value={result.moeBuffers} formula={`4 × 2 B × ${inputs.dpSize} × ${inputs.maxBatchedTokens} × ${inputs.topK} ÷ ${inputs.epSize} × ${inputs.hiddenSize}`} />
+                  <DetailRow label="Hidden states + residual" value={result.hiddenResidual} formula={`2 × 2 B × ${inputs.maxBatchedTokens} × ${model.hiddenSize}`} />
+                  <DetailRow label="4 份 MoE 激活 buffer" value={result.moeBuffers} formula={`4 × 2 B × ${inputs.dpSize} × ${inputs.maxBatchedTokens} × ${inputs.topK} ÷ ${inputs.epSize} × ${model.hiddenSize}`} />
                 </DetailSection>
 
                 <DetailSection title="HCCL buffer" value={result.hccl} tone="blue">
                   <DetailRow label="DP buffer" value={result.hcclDP} formula={`max(ceil((${inputs.dpSize} + 1) × 4 ÷ 1024²), 50) × 2 MB`} />
                   <DetailRow label="TP buffer" value={result.hcclTP} formula="200 MB × 2" />
-                  <DetailRow label="EP buffer" value={result.hcclEP} formula="2 × (dispatch + combine)" />
+                  <DetailRow label={`EP buffer（本地专家 ${localExpertNum}）`} value={result.hcclEP} formula={`2 × (${model.expertCount} ÷ ${inputs.epSize} × Max BS × EP × 480Align512 + K × Max BS × Align512)`} />
                   <div className="sub-detail">
                     <span>Dispatch {formatMB(result.epDispatch)}</span>
                     <span>Combine {formatMB(result.epCombine)}</span>
@@ -257,6 +293,26 @@ function NumberField({ label, value, onChange, step = "1" }: { label: string; va
       <span>{label}</span>
       <input type="number" min="0" step={step} value={value} onChange={(event) => onChange(event.target.value)} />
     </label>
+  );
+}
+
+function SelectField({ label, value, onChange, options }: { label: string; value: string; onChange: (value: string) => void; options: { value: string; label: string }[] }) {
+  return (
+    <label className="field">
+      <span>{label}</span>
+      <select value={value} onChange={(event) => onChange(event.target.value)}>
+        {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
+      </select>
+    </label>
+  );
+}
+
+function ReadOnlyField({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="field">
+      <span>{label}</span>
+      <output className="read-only">{value}<small>模型配置</small></output>
+    </div>
   );
 }
 

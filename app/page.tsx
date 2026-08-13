@@ -10,6 +10,7 @@ type Inputs = {
   maxBS: number;
   graphCount: number;
   cannGB: number;
+  enableSharedExpertTp: boolean;
 };
 
 const DEFAULTS: Inputs = {
@@ -19,26 +20,32 @@ const DEFAULTS: Inputs = {
   maxBS: 128,
   graphCount: 5,
   cannGB: 1,
+  enableSharedExpertTp: false,
 };
 
 const GB = 1_000_000_000;
 const GIB = 1024 ** 3;
 const MB = 1_000_000;
+const MIB = 1024 ** 2;
 const align = (value: number, boundary: number) =>
   Math.ceil(value / boundary) * boundary;
 const align480To512 = (value: number) => Math.ceil(value / 480) * 512;
 
-function formatGB(bytes: number) {
-  return `${(bytes / GB).toLocaleString("zh-CN", {
+function formatGiB(bytes: number) {
+  return `${(bytes / GIB).toLocaleString("zh-CN", {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  })} GB`;
+  })} GiB`;
 }
 
-function formatMB(bytes: number) {
-  return `${(bytes / MB).toLocaleString("zh-CN", {
+function formatMiB(bytes: number) {
+  return `${(bytes / MIB).toLocaleString("zh-CN", {
     maximumFractionDigits: 1,
-  })} MB`;
+  })} MiB`;
+}
+
+function formatCompact(bytes: number) {
+  return bytes >= GIB ? formatGiB(bytes) : formatMiB(bytes);
 }
 
 function safe(value: number, fallback = 0) {
@@ -81,7 +88,60 @@ export default function Home() {
     const graph = (safe(inputs.graphCount) / 5) * 0.27 * GB;
     const cann = safe(inputs.cannGB) * GB;
     const deviceOS = 4.25 * GIB;
-    const total = activation + hccl + graph + cann + deviceOS;
+    const profile = model.weightProfile;
+    const tp = Math.max(1, Math.floor(safe(inputs.tpSize, 1)));
+    const weightConfigValid = Boolean(
+      profile
+      && model.expertCount % ep === 0
+      && profile.attentionHeads % tp === 0
+      && profile.kvHeads % tp === 0
+      && profile.indexerHeads % tp === 0
+      && profile.denseIntermediateSize % tp === 0
+    );
+
+    let weight = 0;
+    let weightBreakdown = null;
+    if (profile && weightConfigValid) {
+      const I = profile.expertIntermediateSize;
+      const routedExpertPayload = profile.moeLayers * localExperts * 3 * H * I;
+      const mxfp8Bytes = (out: number, input: number) => out * input + out * Math.ceil(input / 32);
+      const routedWithScales = profile.moeLayers * localExperts
+        * (mxfp8Bytes(2 * I, H) + mxfp8Bytes(H, I));
+      const routedExpertScales = routedWithScales - routedExpertPayload;
+      const qRank = profile.attentionHeads / tp * profile.headDim;
+      const kvRank = profile.kvHeads / tp * profile.headDim;
+      const indexerRank = profile.indexerHeads / tp * profile.indexerHeadDim;
+      const attentionMatrices = profile.totalLayers * (2 * H * qRank + 2 * H * kvRank)
+        + profile.moeLayers * 2 * H * indexerRank;
+      const attentionMetadata = 119_808;
+      const attention = attentionMatrices + attentionMetadata;
+      const denseMlp = profile.denseLayers * 3 * H * (profile.denseIntermediateSize / tp);
+      const sharedTp = inputs.enableSharedExpertTp ? tp : 1;
+      const sharedExperts = profile.moeLayers * profile.sharedExperts * 3 * H * I / sharedTp;
+      const router = profile.moeLayers * model.expertCount * (H + 1) * 4;
+      const norms = 2_961_408;
+      const paddedVocab = align(profile.vocabSize, profile.vocabPaddingSize);
+      const embedding = paddedVocab / tp * H * 2;
+      const lmHead = embedding;
+      const misc = 256;
+      weight = routedExpertPayload + routedExpertScales + attention + denseMlp
+        + sharedExperts + router + norms + embedding + lmHead + misc;
+      weightBreakdown = {
+        routedExpertPayload,
+        routedExpertScales,
+        attention,
+        denseMlp,
+        sharedExperts,
+        router,
+        norms,
+        embedding,
+        lmHead,
+        misc,
+        paddedVocab,
+      };
+    }
+
+    const total = weight + activation + hccl + graph + cann + deviceOS;
 
     return {
       activation,
@@ -98,9 +158,12 @@ export default function Home() {
       graph,
       cann,
       deviceOS,
+      weight,
+      weightBreakdown,
+      weightConfigValid,
       total,
     };
-  }, [inputs, epSize, localExpertNum, model.hiddenSize, model.topK]);
+  }, [inputs, epSize, localExpertNum, model]);
 
   const update = (key: keyof Inputs, value: string) => {
     setInputs((current) => ({ ...current, [key]: Number(value) }));
@@ -124,10 +187,11 @@ export default function Home() {
   };
 
   const categories = [
-    { label: "激活占用", value: result.activation, color: "var(--coral)", display: formatGB(result.activation) },
-    { label: "HCCL buffer", value: result.hccl, color: "var(--blue)", display: formatGB(result.hccl) },
-    { label: "图占用", value: result.graph, color: "var(--violet)", display: formatGB(result.graph) },
-    { label: "CANN + PTA + 算子", value: result.cann, color: "var(--green)", display: formatGB(result.cann) },
+    ...(model.weightProfile ? [{ label: "权重占用", value: result.weight, color: "var(--rose)", display: result.weightConfigValid ? formatGiB(result.weight) : "配置无效" }] : []),
+    { label: "激活占用", value: result.activation, color: "var(--coral)", display: formatGiB(result.activation) },
+    { label: "HCCL buffer", value: result.hccl, color: "var(--blue)", display: formatGiB(result.hccl) },
+    { label: "图占用", value: result.graph, color: "var(--violet)", display: formatGiB(result.graph) },
+    { label: "CANN + PTA + 算子", value: result.cann, color: "var(--green)", display: formatGiB(result.cann) },
     { label: "Device OS", value: result.deviceOS, color: "var(--amber)", display: "4.25 GiB" },
   ];
 
@@ -187,6 +251,13 @@ export default function Home() {
                 <NumberField label="DP size" value={inputs.dpSize} onChange={(v) => update("dpSize", v)} />
                 <NumberField label="TP size" value={inputs.tpSize} onChange={(v) => update("tpSize", v)} />
               </div>
+              <ToggleField
+                label="Shared Expert TP"
+                checked={inputs.enableSharedExpertTp}
+                onChange={(checked) => setInputs((current) => ({ ...current, enableSharedExpertTp: checked }))}
+                disabled={!model.weightProfile}
+              />
+              <p className="field-note">仅 MiniMax M3 权重建模使用；默认关闭，开启后 Shared Expert 按 TP 切分。</p>
             </fieldset>
 
             <fieldset>
@@ -204,8 +275,8 @@ export default function Home() {
             <article className="hero-card">
               <div className="hero-copy">
                 <span className="eyebrow">ESTIMATED PER DEVICE</span>
-                <div className="total-line"><strong>{formatGB(result.total).replace(" GB", "")}</strong><span>GB</span></div>
-                <p>单卡非权重显存预估</p>
+                <div className="total-line"><strong>{formatGiB(result.total).replace(" GiB", "")}</strong><span>GiB</span></div>
+                <p>{model.weightProfile ? "单卡总显存预估（含权重）" : "单卡非权重显存预估"}</p>
               </div>
             </article>
 
@@ -235,13 +306,13 @@ export default function Home() {
             <article className="breakdown-card">
               <div className="panel-heading">
                 <div><span className="eyebrow">MEMORY MAP</span><h2>显存构成</h2></div>
-                <span className="unit-pill">十进制 GB</span>
+                <span className="unit-pill">GiB</span>
               </div>
               <div className="stack" aria-label="显存构成比例图">
                 {categories.map((item) => (
                   <div
                     key={item.label}
-                    title={`${item.label}: ${formatGB(item.value)}`}
+                    title={`${item.label}: ${formatGiB(item.value)}`}
                     style={{ width: `${result.total ? item.value / result.total * 100 : 0}%`, background: item.color }}
                   />
                 ))}
@@ -251,6 +322,27 @@ export default function Home() {
               </div>
 
               <div className="detail-sections">
+                {model.weightProfile && (
+                  <DetailSection title="权重占用" value={result.weight} tone="rose">
+                    {result.weightBreakdown ? (
+                      <>
+                        <DetailRow label="Routed Experts FP8 payload" value={result.weightBreakdown.routedExpertPayload} formula={`${model.weightProfile.moeLayers} × (${model.expertCount} ÷ ${epSize}) × 3 × ${model.hiddenSize} × ${model.weightProfile.expertIntermediateSize}`} />
+                        <DetailRow label="MXFP8 scale metadata" value={result.weightBreakdown.routedExpertScales} formula="weight_block_size [1, 32]，每 block 1 B scale" />
+                        <DetailRow label="Attention" value={result.weightBreakdown.attention} formula={`Q/KV/Indexer 按 TP ${inputs.tpSize} 切分`} />
+                        <DetailRow label="Dense MLP" value={result.weightBreakdown.denseMlp} formula={`${model.weightProfile.denseLayers} × 3 × H × (${model.weightProfile.denseIntermediateSize} ÷ ${inputs.tpSize})`} />
+                        <DetailRow label={`Shared Experts（${inputs.enableSharedExpertTp ? `TP ${inputs.tpSize}` : "不切分"}）`} value={result.weightBreakdown.sharedExperts} formula={`Lm × Ns × 3 × H × I${inputs.enableSharedExpertTp ? ` ÷ ${inputs.tpSize}` : ""}`} />
+                        <DetailRow label="Router（FP32）" value={result.weightBreakdown.router} formula={`${model.weightProfile.moeLayers} × ${model.expertCount} × (${model.hiddenSize} + 1) × 4 B`} />
+                        <DetailRow label="Norm" value={result.weightBreakdown.norms} formula="BF16 Norm tensors" />
+                        <DetailRow label="Embedding" value={result.weightBreakdown.embedding} formula={`${result.weightBreakdown.paddedVocab} ÷ ${inputs.tpSize} × ${model.hiddenSize} × 2 B`} />
+                        <DetailRow label="LM Head" value={result.weightBreakdown.lmHead} formula={`${result.weightBreakdown.paddedVocab} ÷ ${inputs.tpSize} × ${model.hiddenSize} × 2 B`} />
+                        <DetailRow label="Misc" value={result.weightBreakdown.misc} formula="RoPE inv_freq 等 buffer" />
+                      </>
+                    ) : (
+                      <p className="validation-note">当前 TP/DP 组合不满足专家数、Attention Heads 或中间维度的整除要求。</p>
+                    )}
+                  </DetailSection>
+                )}
+
                 <DetailSection title="激活占用" value={result.activation} tone="coral">
                   <DetailRow label="Hidden states + residual" value={result.hiddenResidual} formula={`2 × 2 B × ${inputs.maxBatchedTokens} × ${model.hiddenSize}`} />
                   <DetailRow label="4 份 MoE 激活 buffer" value={result.moeBuffers} formula={`4 × 2 B × ${inputs.dpSize} × ${inputs.maxBatchedTokens} × ${model.topK} ÷ ${epSize} × ${model.hiddenSize}`} />
@@ -261,8 +353,8 @@ export default function Home() {
                   <DetailRow label="TP buffer" value={result.hcclTP} formula="200 MB × 2" />
                   <DetailRow label={`EP buffer（本地专家 ${localExpertNum.toLocaleString("zh-CN", { maximumFractionDigits: 2 })}）`} value={result.hcclEP} formula={`2 × (${model.expertCount} ÷ ${epSize} × Max BS × EP × 480Align512 + K × Max BS × Align512)`} />
                   <div className="sub-detail">
-                    <span>Dispatch {formatMB(result.epDispatch)}</span>
-                    <span>Combine {formatMB(result.epCombine)}</span>
+                    <span>Dispatch {formatMiB(result.epDispatch)}</span>
+                    <span>Combine {formatMiB(result.epCombine)}</span>
                     <span>480Align512 = {result.alignedDispatch.toLocaleString("zh-CN")} B</span>
                     <span>Align512 = {result.alignedCombine.toLocaleString("zh-CN")} B</span>
                   </div>
@@ -276,7 +368,7 @@ export default function Home() {
               </div>
             </article>
 
-            <p className="method-note"><strong>口径说明</strong> 所有结果均为单卡估算；GB 按 10⁹ bytes 计算。TP size 作为部署配置展示，TP HCCL buffer 按给定公式固定计入 400 MB。</p>
+            <p className="method-note"><strong>口径说明</strong> 所有结果均为单卡估算并统一显示为 GiB。MiniMax M3 权重默认包含 MXFP8 scale；EP 自动等于 TP × DP。其他模型暂不计算权重。</p>
           </section>
         </section>
       </div>
@@ -304,10 +396,21 @@ function SelectField({ label, value, onChange, options }: { label: string; value
   );
 }
 
+function ToggleField({ label, checked, onChange, disabled = false }: { label: string; checked: boolean; onChange: (checked: boolean) => void; disabled?: boolean }) {
+  return (
+    <label className={`toggle-field${disabled ? " disabled" : ""}`}>
+      <span>{label}</span>
+      <input type="checkbox" checked={checked} disabled={disabled} onChange={(event) => onChange(event.target.checked)} />
+      <i aria-hidden="true"><b /></i>
+      <em>{checked ? "已开启" : "已关闭"}</em>
+    </label>
+  );
+}
+
 function DetailSection({ title, value, tone, children }: { title: string; value: number; tone: string; children: React.ReactNode }) {
   return (
     <section className={`detail-section ${tone}`}>
-      <div className="detail-title"><span>{title}</span><strong>{formatGB(value)}</strong></div>
+      <div className="detail-title"><span>{title}</span><strong>{formatGiB(value)}</strong></div>
       {children}
     </section>
   );
@@ -317,7 +420,7 @@ function DetailRow({ label, value, formula }: { label: string; value: number; fo
   return (
     <div className="detail-row">
       <div><span>{label}</span><code>{formula}</code></div>
-      <strong>{formatMB(value)}</strong>
+      <strong>{formatCompact(value)}</strong>
     </div>
   );
 }

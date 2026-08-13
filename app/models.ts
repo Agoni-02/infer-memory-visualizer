@@ -6,6 +6,23 @@ export type ModelConfig = {
   expertCount: number;
   topK: number;
   source: string;
+  weightProfile?: WeightProfile;
+};
+
+export type WeightProfile = {
+  vocabSize: number;
+  totalLayers: number;
+  denseLayers: number;
+  moeLayers: number;
+  expertIntermediateSize: number;
+  denseIntermediateSize: number;
+  attentionHeads: number;
+  kvHeads: number;
+  headDim: number;
+  indexerHeads: number;
+  indexerHeadDim: number;
+  sharedExperts: number;
+  vocabPaddingSize: number;
 };
 
 // Curated from the same official Hugging Face config sources used by
@@ -48,6 +65,21 @@ const SPECIAL_TOP_K: Record<string, number> = {
 export const MODELS: ModelConfig[] = BASE_MODELS.map((model) => ({
   ...model,
   topK: SPECIAL_TOP_K[model.id] ?? 8,
+  weightProfile: model.id === "minimax-m3" ? {
+    vocabSize: 200064,
+    totalLayers: 60,
+    denseLayers: 3,
+    moeLayers: 57,
+    expertIntermediateSize: 3072,
+    denseIntermediateSize: 12288,
+    attentionHeads: 64,
+    kvHeads: 4,
+    headDim: 128,
+    indexerHeads: 4,
+    indexerHeadDim: 128,
+    sharedExperts: 1,
+    vocabPaddingSize: 64,
+  } : undefined,
 }));
 
 export const DEFAULT_MODEL_ID = "deepseek-v3";

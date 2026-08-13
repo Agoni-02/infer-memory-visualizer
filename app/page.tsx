@@ -177,11 +177,7 @@ export default function Home() {
                 <SelectField label="模型族" value={family} onChange={changeFamily} options={families.map((item) => ({ value: item, label: item }))} />
                 <SelectField label="模型" value={modelId} onChange={changeModel} options={familyModels.map((item) => ({ value: item.id, label: item.label }))} />
               </div>
-              <div className="field-grid">
-                <ReadOnlyField label="Hidden size" value={model.hiddenSize.toLocaleString("zh-CN")} />
-                <ReadOnlyField label="专家总数" value={model.expertCount.toLocaleString("zh-CN")} />
-              </div>
-              <a className="model-source" href={model.source} target="_blank" rel="noopener noreferrer">查看官方模型配置 ↗</a>
+              <p className="field-note">模型参数从官方配置自动读取并参与计算。</p>
             </fieldset>
 
             <fieldset>

@@ -28,6 +28,8 @@ test("server-renders the inference memory planner", async () => {
   assert.match(html, /TopK 专家/);
   assert.match(html, /EP size/);
   assert.match(html, /TP .*8.* × DP .*8/);
+  assert.match(html, /Device OS/);
+  assert.match(html, /4\.25 GiB/);
   assert.match(html, /HCCL buffer/);
   assert.match(html, /CANN \+ PTA \+ 算子/);
   assert.match(html, /单卡非权重显存预估/);

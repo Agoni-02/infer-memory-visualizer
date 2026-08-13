@@ -22,6 +22,7 @@ const DEFAULTS: Inputs = {
 };
 
 const GB = 1_000_000_000;
+const GIB = 1024 ** 3;
 const MB = 1_000_000;
 const align = (value: number, boundary: number) =>
   Math.ceil(value / boundary) * boundary;
@@ -79,7 +80,8 @@ export default function Home() {
 
     const graph = (safe(inputs.graphCount) / 5) * 0.27 * GB;
     const cann = safe(inputs.cannGB) * GB;
-    const total = activation + hccl + graph + cann;
+    const deviceOS = 4.25 * GIB;
+    const total = activation + hccl + graph + cann + deviceOS;
 
     return {
       activation,
@@ -95,6 +97,7 @@ export default function Home() {
       alignedCombine,
       graph,
       cann,
+      deviceOS,
       total,
     };
   }, [inputs, epSize, localExpertNum, model.hiddenSize, model.topK]);
@@ -121,10 +124,11 @@ export default function Home() {
   };
 
   const categories = [
-    { label: "激活占用", value: result.activation, color: "var(--coral)" },
-    { label: "HCCL buffer", value: result.hccl, color: "var(--blue)" },
-    { label: "图占用", value: result.graph, color: "var(--violet)" },
-    { label: "CANN + PTA + 算子", value: result.cann, color: "var(--green)" },
+    { label: "激活占用", value: result.activation, color: "var(--coral)", display: formatGB(result.activation) },
+    { label: "HCCL buffer", value: result.hccl, color: "var(--blue)", display: formatGB(result.hccl) },
+    { label: "图占用", value: result.graph, color: "var(--violet)", display: formatGB(result.graph) },
+    { label: "CANN + PTA + 算子", value: result.cann, color: "var(--green)", display: formatGB(result.cann) },
+    { label: "Device OS", value: result.deviceOS, color: "var(--amber)", display: "4.25 GiB" },
   ];
 
   return (
@@ -225,7 +229,7 @@ export default function Home() {
               {categories.map((item) => (
                 <article className="metric-card" key={item.label}>
                   <div className="metric-label"><i style={{ background: item.color }} />{item.label}</div>
-                  <strong>{formatGB(item.value)}</strong>
+                  <strong>{item.display}</strong>
                   <span>{result.total ? `${(item.value / result.total * 100).toFixed(1)}%` : "0%"} of total</span>
                 </article>
               ))}
@@ -267,9 +271,10 @@ export default function Home() {
                   </div>
                 </DetailSection>
 
-                <DetailSection title="其他运行时" value={result.graph + result.cann} tone="violet">
+                <DetailSection title="其他运行时" value={result.graph + result.cann + result.deviceOS} tone="violet">
                   <DetailRow label={`图占用（${inputs.graphCount} 张）`} value={result.graph} formula={`${inputs.graphCount} ÷ 5 × 0.27 GB`} />
                   <DetailRow label="CANN + PTA + 算子" value={result.cann} formula={`${inputs.cannGB} GB 预估值`} />
+                  <DetailRow label="Device OS 固定占用" value={result.deviceOS} formula="4.25 × 1024³ bytes = 4.25 GiB" />
                 </DetailSection>
               </div>
             </article>

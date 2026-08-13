@@ -25,6 +25,7 @@ test("server-renders the inference memory planner", async () => {
   assert.match(html, /本地专家数/);
   assert.match(html, /Hidden size/);
   assert.match(html, /专家总数/);
+  assert.match(html, /TopK 专家/);
   assert.match(html, /HCCL buffer/);
   assert.match(html, /CANN \+ PTA \+ 算子/);
   assert.match(html, /单卡非权重显存预估/);

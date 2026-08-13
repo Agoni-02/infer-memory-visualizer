@@ -4,12 +4,13 @@ export type ModelConfig = {
   label: string;
   hiddenSize: number;
   expertCount: number;
+  topK: number;
   source: string;
 };
 
 // Curated from the same official Hugging Face config sources used by
 // kv-cache-calculator. This calculator intentionally lists MoE models only.
-export const MODELS: ModelConfig[] = [
+const BASE_MODELS: Omit<ModelConfig, "topK">[] = [
   { id: "deepseek-v4-pro", family: "DeepSeek", label: "DeepSeek V4 Pro", hiddenSize: 7168, expertCount: 384, source: "https://huggingface.co/deepseek-ai/DeepSeek-V4-Pro/raw/main/config.json" },
   { id: "deepseek-v4-flash", family: "DeepSeek", label: "DeepSeek V4 Flash", hiddenSize: 4096, expertCount: 256, source: "https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash/raw/main/config.json" },
   { id: "deepseek-v3.2", family: "DeepSeek", label: "DeepSeek V3.2", hiddenSize: 7168, expertCount: 256, source: "https://huggingface.co/deepseek-ai/DeepSeek-V3.2/raw/main/config.json" },
@@ -36,5 +37,17 @@ export const MODELS: ModelConfig[] = [
   { id: "minimax-m2.1", family: "MiniMax", label: "MiniMax M2.1", hiddenSize: 3072, expertCount: 256, source: "https://huggingface.co/MiniMaxAI/MiniMax-M2.1/raw/main/config.json" },
   { id: "minimax-m2", family: "MiniMax", label: "MiniMax M2", hiddenSize: 3072, expertCount: 256, source: "https://huggingface.co/MiniMaxAI/MiniMax-M2/raw/main/config.json" },
 ];
+
+const SPECIAL_TOP_K: Record<string, number> = {
+  "deepseek-v4-pro": 6,
+  "deepseek-v4-flash": 6,
+  "qwen3.5-397b-a17b": 10,
+  "minimax-m3": 4,
+};
+
+export const MODELS: ModelConfig[] = BASE_MODELS.map((model) => ({
+  ...model,
+  topK: SPECIAL_TOP_K[model.id] ?? 8,
+}));
 
 export const DEFAULT_MODEL_ID = "deepseek-v3";

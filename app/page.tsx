@@ -8,7 +8,6 @@ type Inputs = {
   dpSize: number;
   tpSize: number;
   epSize: number;
-  topK: number;
   maxBS: number;
   graphCount: number;
   cannGB: number;
@@ -19,7 +18,6 @@ const DEFAULTS: Inputs = {
   dpSize: 8,
   tpSize: 8,
   epSize: 8,
-  topK: 8,
   maxBS: 128,
   graphCount: 5,
   cannGB: 1,
@@ -65,7 +63,7 @@ export default function Home() {
     const T = safe(inputs.maxBatchedTokens);
     const dp = Math.max(1, safe(inputs.dpSize, 1));
     const ep = Math.max(1, safe(inputs.epSize, 1));
-    const K = safe(inputs.topK);
+    const K = model.topK;
     const localExperts = localExpertNum;
     const maxBS = safe(inputs.maxBS);
 
@@ -102,7 +100,7 @@ export default function Home() {
       cann,
       total,
     };
-  }, [inputs, localExpertNum, model.hiddenSize]);
+  }, [inputs, localExpertNum, model.hiddenSize, model.topK]);
 
   const update = (key: keyof Inputs, value: string) => {
     setInputs((current) => ({ ...current, [key]: Number(value) }));
@@ -192,7 +190,6 @@ export default function Home() {
                 <NumberField label="TP size" value={inputs.tpSize} onChange={(v) => update("tpSize", v)} />
                 <SelectField label="EP size" value={String(inputs.epSize)} onChange={(v) => update("epSize", v)} options={epSizes.map((size) => ({ value: String(size), label: String(size) }))} />
               </div>
-              <NumberField label="TopK 专家" value={inputs.topK} onChange={(v) => update("topK", v)} />
             </fieldset>
 
             <fieldset>
@@ -225,6 +222,7 @@ export default function Home() {
               </div>
               <div className="model-fact"><span>Hidden size</span><strong>{model.hiddenSize.toLocaleString("zh-CN")}</strong></div>
               <div className="model-fact"><span>专家总数</span><strong>{model.expertCount.toLocaleString("zh-CN")}</strong></div>
+              <div className="model-fact"><span>TopK 专家</span><strong>{model.topK.toLocaleString("zh-CN")}</strong></div>
               <div className="model-fact"><span>本地专家数</span><strong>{localExpertNum.toLocaleString("zh-CN")}</strong><small>{model.expertCount} ÷ EP {inputs.epSize}</small></div>
               <a className="model-source" href={model.source} target="_blank" rel="noopener noreferrer" aria-label={`查看 ${model.label} 官方配置`}>官方配置 ↗</a>
             </article>
@@ -260,7 +258,7 @@ export default function Home() {
               <div className="detail-sections">
                 <DetailSection title="激活占用" value={result.activation} tone="coral">
                   <DetailRow label="Hidden states + residual" value={result.hiddenResidual} formula={`2 × 2 B × ${inputs.maxBatchedTokens} × ${model.hiddenSize}`} />
-                  <DetailRow label="4 份 MoE 激活 buffer" value={result.moeBuffers} formula={`4 × 2 B × ${inputs.dpSize} × ${inputs.maxBatchedTokens} × ${inputs.topK} ÷ ${inputs.epSize} × ${model.hiddenSize}`} />
+                  <DetailRow label="4 份 MoE 激活 buffer" value={result.moeBuffers} formula={`4 × 2 B × ${inputs.dpSize} × ${inputs.maxBatchedTokens} × ${model.topK} ÷ ${inputs.epSize} × ${model.hiddenSize}`} />
                 </DetailSection>
 
                 <DetailSection title="HCCL buffer" value={result.hccl} tone="blue">

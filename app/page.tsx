@@ -2,6 +2,7 @@
 
 import { useMemo, useState } from "react";
 import { DEFAULT_MODEL_ID, MODELS } from "./models";
+import { calculateMiniMaxM3Weight } from "./weight-model";
 
 type Inputs = {
   maxBatchedTokens: number;
@@ -97,48 +98,21 @@ export default function Home() {
       && profile.kvHeads % tp === 0
       && profile.indexerHeads % tp === 0
       && profile.denseIntermediateSize % tp === 0
+      && (!inputs.enableSharedExpertTp || profile.expertIntermediateSize % tp === 0)
     );
 
     let weight = 0;
     let weightBreakdown = null;
     if (profile && weightConfigValid) {
-      const I = profile.expertIntermediateSize;
-      const routedExpertPayload = profile.moeLayers * localExperts * 3 * H * I;
-      const mxfp8Bytes = (out: number, input: number) => out * input + out * Math.ceil(input / 32);
-      const routedWithScales = profile.moeLayers * localExperts
-        * (mxfp8Bytes(2 * I, H) + mxfp8Bytes(H, I));
-      const routedExpertScales = routedWithScales - routedExpertPayload;
-      const qRank = profile.attentionHeads / tp * profile.headDim;
-      const kvRank = profile.kvHeads / tp * profile.headDim;
-      const indexerRank = profile.indexerHeads / tp * profile.indexerHeadDim;
-      const attentionMatrices = profile.totalLayers * (2 * H * qRank + 2 * H * kvRank)
-        + profile.moeLayers * 2 * H * indexerRank;
-      const attentionMetadata = 119_808;
-      const attention = attentionMatrices + attentionMetadata;
-      const denseMlp = profile.denseLayers * 3 * H * (profile.denseIntermediateSize / tp);
-      const sharedTp = inputs.enableSharedExpertTp ? tp : 1;
-      const sharedExperts = profile.moeLayers * profile.sharedExperts * 3 * H * I / sharedTp;
-      const router = profile.moeLayers * model.expertCount * (H + 1) * 4;
-      const norms = 2_961_408;
-      const paddedVocab = align(profile.vocabSize, profile.vocabPaddingSize);
-      const embedding = paddedVocab / tp * H * 2;
-      const lmHead = embedding;
-      const misc = 256;
-      weight = routedExpertPayload + routedExpertScales + attention + denseMlp
-        + sharedExperts + router + norms + embedding + lmHead + misc;
-      weightBreakdown = {
-        routedExpertPayload,
-        routedExpertScales,
-        attention,
-        denseMlp,
-        sharedExperts,
-        router,
-        norms,
-        embedding,
-        lmHead,
-        misc,
-        paddedVocab,
-      };
+      weightBreakdown = calculateMiniMaxM3Weight({
+        profile,
+        hiddenSize: H,
+        expertCount: model.expertCount,
+        tpSize: tp,
+        epSize: ep,
+        enableSharedExpertTp: inputs.enableSharedExpertTp,
+      });
+      weight = weightBreakdown.total;
     }
 
     const total = weight + activation + hccl + graph + cann + deviceOS;
@@ -327,10 +301,14 @@ export default function Home() {
                     {result.weightBreakdown ? (
                       <>
                         <DetailRow label="Routed Experts FP8 payload" value={result.weightBreakdown.routedExpertPayload} formula={`${model.weightProfile.moeLayers} × (${model.expertCount} ÷ ${epSize}) × 3 × ${model.hiddenSize} × ${model.weightProfile.expertIntermediateSize}`} />
-                        <DetailRow label="MXFP8 scale metadata" value={result.weightBreakdown.routedExpertScales} formula="weight_block_size [1, 32]，每 block 1 B scale" />
-                        <DetailRow label="Attention" value={result.weightBreakdown.attention} formula={`Q/KV/Indexer 按 TP ${inputs.tpSize} 切分`} />
-                        <DetailRow label="Dense MLP" value={result.weightBreakdown.denseMlp} formula={`${model.weightProfile.denseLayers} × 3 × H × (${model.weightProfile.denseIntermediateSize} ÷ ${inputs.tpSize})`} />
-                        <DetailRow label={`Shared Experts（${inputs.enableSharedExpertTp ? `TP ${inputs.tpSize}` : "不切分"}）`} value={result.weightBreakdown.sharedExperts} formula={`Lm × Ns × 3 × H × I${inputs.enableSharedExpertTp ? ` ÷ ${inputs.tpSize}` : ""}`} />
+                        <DetailRow label="Routed Experts MXFP8 scale" value={result.weightBreakdown.routedExpertScales} formula="随本地专家数 E ÷ EP 切分；每 [1, 32] block 1 B" />
+                        <DetailRow label="Attention FP8 payload" value={result.weightBreakdown.attentionPayload} formula={`Q/K/V/O 与 Indexer Q 按 TP ${inputs.tpSize} 切分；Indexer K 复制`} />
+                        <DetailRow label="Attention MXFP8 scale" value={result.weightBreakdown.attentionScales} formula="按各 Rank 实际 Q/K/V/O/Indexer 矩阵 shape 精确计算" />
+                        <DetailRow label="Attention 辅助张量" value={result.weightBreakdown.attentionMetadata} formula="Q/K Norm、Indexer Q/K Norm 等" />
+                        <DetailRow label="Dense MLP FP8 payload" value={result.weightBreakdown.denseMlpPayload} formula={`${model.weightProfile.denseLayers} × 3 × H × (${model.weightProfile.denseIntermediateSize} ÷ ${inputs.tpSize})`} />
+                        <DetailRow label="Dense MLP MXFP8 scale" value={result.weightBreakdown.denseMlpScales} formula="按 TP 切分后的实际矩阵 shape 计算" />
+                        <DetailRow label={`Shared Experts FP8 payload（${inputs.enableSharedExpertTp ? `TP ${inputs.tpSize}` : "不切分"}）`} value={result.weightBreakdown.sharedExpertPayload} formula={`Lm × Ns × 3 × H × I${inputs.enableSharedExpertTp ? ` ÷ ${inputs.tpSize}` : ""}`} />
+                        <DetailRow label="Shared Experts MXFP8 scale" value={result.weightBreakdown.sharedExpertScales} formula={inputs.enableSharedExpertTp ? `按 TP ${inputs.tpSize} 切分后的实际矩阵 shape 计算` : "不随 EP 切分，每个 Device 保留完整 scale"} />
                         <DetailRow label="Router（FP32）" value={result.weightBreakdown.router} formula={`${model.weightProfile.moeLayers} × ${model.expertCount} × (${model.hiddenSize} + 1) × 4 B`} />
                         <DetailRow label="Norm" value={result.weightBreakdown.norms} formula="BF16 Norm tensors" />
                         <DetailRow label="Embedding" value={result.weightBreakdown.embedding} formula={`${result.weightBreakdown.paddedVocab} ÷ ${inputs.tpSize} × ${model.hiddenSize} × 2 B`} />

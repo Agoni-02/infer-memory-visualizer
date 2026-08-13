@@ -48,7 +48,7 @@ const BASE_MODELS: Omit<ModelConfig, "topK">[] = [
   { id: "cohere-command-a-plus-05-2026", family: "Cohere", label: "Command A Plus 05-2026", hiddenSize: 4096, expertCount: 128, source: "https://huggingface.co/CohereLabs/command-a-plus-05-2026-bf16/raw/main/config.json" },
   { id: "mimo-v2.5-pro", family: "MiMo", label: "MiMo-V2.5-Pro", hiddenSize: 6144, expertCount: 384, source: "https://huggingface.co/XiaomiMiMo/MiMo-V2.5-Pro/raw/main/config.json" },
   { id: "mimo-v2.5", family: "MiMo", label: "MiMo-V2.5", hiddenSize: 4096, expertCount: 256, source: "https://huggingface.co/XiaomiMiMo/MiMo-V2.5/raw/main/config.json" },
-  { id: "minimax-m3", family: "MiniMax", label: "MiniMax M3", hiddenSize: 6144, expertCount: 128, source: "https://huggingface.co/MiniMaxAI/MiniMax-M3/raw/main/config.json" },
+  { id: "minimax-m3", family: "MiniMax", label: "MiniMax M3", hiddenSize: 6144, expertCount: 128, source: "https://huggingface.co/MiniMaxAI/MiniMax-M3-MXFP8/blob/main/config.json" },
   { id: "minimax-m2.7", family: "MiniMax", label: "MiniMax M2.7", hiddenSize: 3072, expertCount: 256, source: "https://huggingface.co/MiniMaxAI/MiniMax-M2.7/raw/main/config.json" },
   { id: "minimax-m2.5", family: "MiniMax", label: "MiniMax M2.5", hiddenSize: 3072, expertCount: 256, source: "https://huggingface.co/MiniMaxAI/MiniMax-M2.5/raw/main/config.json" },
   { id: "minimax-m2.1", family: "MiniMax", label: "MiniMax M2.1", hiddenSize: 3072, expertCount: 256, source: "https://huggingface.co/MiniMaxAI/MiniMax-M2.1/raw/main/config.json" },

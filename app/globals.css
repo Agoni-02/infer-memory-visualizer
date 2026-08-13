@@ -95,11 +95,6 @@ legend { margin-bottom: 10px; padding: 0; color: var(--muted); font-size: 11px; 
 .total-line strong { font-size: clamp(48px, 6vw, 72px); line-height: .98; letter-spacing: -.065em; font-weight: 700; font-variant-numeric: tabular-nums; }
 .total-line span { color: #477161; font-size: 18px; font-weight: 750; }
 .hero-copy p { margin: 10px 0 0; color: var(--muted); font-size: 13px; }
-.ring { --progress: 60%; flex: 0 0 auto; width: 116px; height: 116px; display: grid; place-items: center; border-radius: 50%; background: conic-gradient(#3f8a70 var(--progress), rgba(100,120,112,.12) 0); box-shadow: 0 10px 30px rgba(42, 91, 74, .15); }
-.ring::before { grid-area: 1 / 1; width: 92px; height: 92px; border-radius: 50%; background: var(--paper); content: ""; }
-.ring div { z-index: 1; grid-area: 1 / 1; display: grid; text-align: center; }
-.ring strong { font-size: 28px; line-height: 1; }
-.ring span { margin-top: 5px; color: var(--muted); font-size: 10px; }
 .model-context-card { display: grid; grid-template-columns: minmax(145px, 1.3fr) repeat(5, minmax(68px, 1fr)) auto; align-items: center; gap: 8px; padding: 13px 16px; border-radius: 13px; }
 .model-identity { min-width: 0; }
 .model-identity .eyebrow { margin-bottom: 2px; }
@@ -160,9 +155,6 @@ legend { margin-bottom: 10px; padding: 0; color: var(--muted); font-size: 11px; 
   .workspace { grid-template-columns: 1fr; }
   .control-card { position: static; }
   .hero-card { min-height: 162px; padding: 22px; }
-  .ring { width: 92px; height: 92px; }
-  .ring::before { width: 73px; height: 73px; }
-  .ring strong { font-size: 22px; }
   .model-context-card { grid-template-columns: 1.4fr 1fr; }
   .model-identity { grid-column: 1 / -1; }
   .model-fact:nth-of-type(2) { border-left: 0; padding-left: 0; }
@@ -175,9 +167,6 @@ legend { margin-bottom: 10px; padding: 0; color: var(--muted); font-size: 11px; 
   .brand-mark { width: 35px; height: 35px; }
   .hero-card { gap: 12px; }
   .total-line strong { font-size: 43px; }
-  .ring { width: 80px; height: 80px; }
-  .ring::before { width: 64px; height: 64px; }
-  .ring span { display: none; }
   .metric-grid { grid-template-columns: 1fr 1fr; }
   .metric-card > strong { font-size: 17px; }
   .field-grid.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }

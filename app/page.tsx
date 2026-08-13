@@ -207,9 +207,6 @@ export default function Home() {
                 <div className="total-line"><strong>{formatGB(result.total).replace(" GB", "")}</strong><span>GB</span></div>
                 <p>单卡非权重显存预估</p>
               </div>
-              <div className="ring" style={{ "--progress": `${Math.min(100, result.total / (8 * GB) * 100)}%` } as React.CSSProperties}>
-                <div><strong>{Math.ceil(result.total / GB)}</strong><span>GB 档位</span></div>
-              </div>
             </article>
 
             <article className="model-context-card">

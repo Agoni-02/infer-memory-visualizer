@@ -192,11 +192,7 @@ export default function Home() {
                 <NumberField label="TP size" value={inputs.tpSize} onChange={(v) => update("tpSize", v)} />
                 <SelectField label="EP size" value={String(inputs.epSize)} onChange={(v) => update("epSize", v)} options={epSizes.map((size) => ({ value: String(size), label: String(size) }))} />
               </div>
-              <div className="field-grid">
-                <NumberField label="TopK 专家" value={inputs.topK} onChange={(v) => update("topK", v)} />
-                <ReadOnlyField label="本地专家数" value={localExpertNum.toLocaleString("zh-CN")} />
-              </div>
-              <p className="field-note">本地专家数 = {model.expertCount} ÷ {inputs.epSize} = {localExpertNum}</p>
+              <NumberField label="TopK 专家" value={inputs.topK} onChange={(v) => update("topK", v)} />
             </fieldset>
 
             <fieldset>
@@ -220,6 +216,17 @@ export default function Home() {
               <div className="ring" style={{ "--progress": `${Math.min(100, result.total / (8 * GB) * 100)}%` } as React.CSSProperties}>
                 <div><strong>{Math.ceil(result.total / GB)}</strong><span>GB 档位</span></div>
               </div>
+            </article>
+
+            <article className="model-context-card">
+              <div className="model-identity">
+                <span className="eyebrow">ACTIVE MODEL</span>
+                <strong>{model.label}</strong>
+              </div>
+              <div className="model-fact"><span>Hidden size</span><strong>{model.hiddenSize.toLocaleString("zh-CN")}</strong></div>
+              <div className="model-fact"><span>专家总数</span><strong>{model.expertCount.toLocaleString("zh-CN")}</strong></div>
+              <div className="model-fact"><span>本地专家数</span><strong>{localExpertNum.toLocaleString("zh-CN")}</strong><small>{model.expertCount} ÷ EP {inputs.epSize}</small></div>
+              <a className="model-source" href={model.source} target="_blank" rel="noopener noreferrer" aria-label={`查看 ${model.label} 官方配置`}>官方配置 ↗</a>
             </article>
 
             <div className="metric-grid">
@@ -300,15 +307,6 @@ function SelectField({ label, value, onChange, options }: { label: string; value
         {options.map((option) => <option key={option.value} value={option.value}>{option.label}</option>)}
       </select>
     </label>
-  );
-}
-
-function ReadOnlyField({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="field">
-      <span>{label}</span>
-      <output className="read-only">{value}<small>模型配置</small></output>
-    </div>
   );
 }
 

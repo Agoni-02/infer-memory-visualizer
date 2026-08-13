@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
 import test from "node:test";
 
 async function render() {
@@ -42,4 +43,11 @@ test("includes accessible numeric controls and a live result region", async () =
   assert.match(html, /type="number"/);
   assert.match(html, /aria-live="polite"/);
   assert.match(html, /切换到深色模式/);
+});
+
+test("GitHub Pages output uses the repository base path", async () => {
+  const html = await readFile(new URL("../pages-dist/index.html", import.meta.url), "utf8");
+  assert.match(html, /\/infer-memory-visualizer\/assets\//);
+  assert.match(html, /\/infer-memory-visualizer\/og\.png/);
+  assert.doesNotMatch(html, /(?:href|src)="\/assets\//);
 });

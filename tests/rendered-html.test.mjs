@@ -28,13 +28,16 @@ test("server-renders the inference memory planner", async () => {
   assert.match(html, /专家总数/);
   assert.match(html, /TopK 专家/);
   assert.match(html, /EP size/);
-  assert.match(html, /TP .*8.* × DP .*8/);
+  assert.match(html, /MiniMax M3/);
+  assert.match(html, /TP .*4.* × DP .*8/);
+  assert.match(html, /KV \+ Index Cache/);
   assert.match(html, /Device OS/);
   assert.match(html, /4\.25 GiB/);
   assert.doesNotMatch(html, /GB 档位/);
   assert.match(html, /HCCL buffer/);
   assert.match(html, /CANN \+ PTA \+ 算子/);
-  assert.match(html, /单卡非权重显存预估/);
+  assert.match(html, /单卡总显存预估（含权重）/);
+  assert.match(html, /88\.83/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
 });
 

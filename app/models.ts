@@ -5,13 +5,27 @@ export type ModelConfig = {
   hiddenSize: number;
   expertCount: number;
   topK: number;
-  source: string;
+  source?: string;
   weightProfile?: WeightProfile;
+  kvCacheProfile?: KvCacheProfile;
+  supportsMtp?: boolean;
+};
+
+export type MxWeightFormat = "mxfp8" | "mxfp4";
+
+export type KvCacheProfile = {
+  layers: number;
+  sparseLayers: number;
+  kvHeads: number;
+  headDim: number;
+  indexHeadDim: number;
+  sharedKv: boolean;
 };
 
 export type WeightProfile = {
   vocabSize: number;
   totalLayers: number;
+  sparseAttentionLayers?: number;
   denseLayers: number;
   moeLayers: number;
   expertIntermediateSize: number;
@@ -19,10 +33,15 @@ export type WeightProfile = {
   attentionHeads: number;
   kvHeads: number;
   headDim: number;
+  valueHeadDim?: number;
   indexerHeads: number;
   indexerHeadDim: number;
   sharedExperts: number;
   vocabPaddingSize: number;
+  moeWeightFormat?: MxWeightFormat;
+  sharedExpertWeightFormat?: MxWeightFormat;
+  sharedKv?: boolean;
+  qkvProjection?: "qkvo" | "qk";
 };
 
 // Curated from the same official Hugging Face config sources used by
@@ -79,7 +98,17 @@ export const MODELS: ModelConfig[] = BASE_MODELS.map((model) => ({
     indexerHeadDim: 128,
     sharedExperts: 1,
     vocabPaddingSize: 64,
+    moeWeightFormat: "mxfp8",
+    qkvProjection: "qkvo",
+  } : undefined,
+  kvCacheProfile: model.id === "minimax-m3" ? {
+    layers: 60,
+    sparseLayers: 57,
+    kvHeads: 4,
+    headDim: 128,
+    indexHeadDim: 128,
+    sharedKv: false,
   } : undefined,
 }));
 
-export const DEFAULT_MODEL_ID = "deepseek-v3";
+export const DEFAULT_MODEL_ID = "minimax-m3";
